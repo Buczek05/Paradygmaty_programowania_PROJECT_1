@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+#define CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -6,115 +6,141 @@
 
 typedef struct
 {
-    long double poczatek_przedzialu, koniec_przedzialu, kroki;
-    double dokladnosc;
-    long maksylana_liczba_iteracji;
-} Parametry;
+    long double interval_start, interval_end, steps;
+    double precision;
+    long max_iterations;
+} Parameters;
 
 typedef struct
 {
-    long double x, suma, wyraz;
-    long ostatnia_iteracja;
-    short skonczono_iteracje, uzyskano_dokladnosc;
-} SzeregInfo;
+    long double x, sum, term;
+    long last_iteration;
+    short iterations_finished, precision_achieved;
+} SeriesInfo;
 
-void otworz_sprawdz_pliki(FILE **plik_wizualny, FILE **plik_csv);
-Parametry wczytaj_parametry();
-int sprawdz_parametry(Parametry *parametry);
-long double func(long double x);
-SzeregInfo szereg(long double x, double dokladnosc, long liczba_iteracji);
-SzeregInfo utworz_szereg_info(long double x);
-void iteruj_szereg(long *iteracja, SzeregInfo *szereg_info);
-int czy_uzyskano_dokladnosc(SzeregInfo *szereg_info, double *dokladnosc);
-void zapisz_wyniki_i_wypisz(SzeregInfo *szereg_info, long double *y, FILE **plik_wizualny, FILE **plik_csv);
-void zamknij_pliki(FILE **plik_wizualny, FILE **plik_csv);
+void open_check_files(FILE **visual_file, FILE **csv_file);
+Parameters read_parameters();
+long double read_long_double(char *message);
+double read_double(char *message);
+int check_parameters_and_report_error(Parameters *Parameters);
+long double function(long double x);
+SeriesInfo series(long double x, double precision, long number_of_iterations);
+SeriesInfo initialize_series_info(long double x);
+void iterate_series(long *iteration, SeriesInfo *series_info);
+int is_precision_achieved(SeriesInfo *series_info, double *precision);
+void save_and_print_results(SeriesInfo *series_info, long double *y, FILE **visual_file, FILE **csv_file);
+void close_files(FILE **visual_file, FILE **csv_file);
 
 int main()
 {
-    FILE *plik_wizualny, *plik_csv;
-    otworz_sprawdz_pliki(&plik_wizualny, &plik_csv);
-    Parametry parametry = wczytaj_parametry();
-    long double x, *poczatek, *koniec, *kroki;
-    poczatek = &parametry.poczatek_przedzialu;
-    koniec = &parametry.koniec_przedzialu;
-    kroki = &parametry.kroki;
-    for (x = *poczatek; x <= *koniec + 1e-15; x += *kroki)
+    FILE *visual_file, *csv_file;
+    open_check_files(&visual_file, &csv_file);
+    Parameters parameters = read_parameters();
+    long double x, *start, *end, *steps;
+    start = &parameters.interval_start;
+    end = &parameters.interval_end;
+    steps = &parameters.steps;
+    x = *start;
+    while (x <= *end + 1e-15)
     {
-        SzeregInfo szereg_info = szereg(x,
-                                        parametry.dokladnosc,
-                                        parametry.maksylana_liczba_iteracji);
-        long double y = func(x);
-        zapisz_wyniki_i_wypisz(&szereg_info, &y, &plik_wizualny, &plik_csv);
+        SeriesInfo series_info = series(x,
+                                        parameters.precision,
+                                        parameters.max_iterations);
+        long double y = function(x);
+        save_and_print_results(&series_info, &y, &visual_file, &csv_file);
+        x += *steps;
     }
-    zamknij_pliki(&plik_wizualny, &plik_csv);
+    close_files(&visual_file, &csv_file);
     return 0;
 }
 
-void otworz_sprawdz_pliki(FILE **plik_wizualny, FILE **plik_csv)
+void open_check_files(FILE **visual_file, FILE **csv_file)
 {
-    *plik_wizualny = fopen("wyniki_tabelka.txt", "w");
-    *plik_csv = fopen("wyniki.csv", "w");
-    if (*plik_wizualny == NULL || *plik_csv == NULL)
+    *visual_file = fopen("results_table.txt", "w");
+    *csv_file = fopen("results.csv", "w");
+    if (*visual_file == NULL || *csv_file == NULL)
     {
-        printf("Nie udało się otworzyć plików\n");
+        printf("Can't open files\n");
         exit(1);
     }
-    fprintf(*plik_csv, "x;f_szereg(x);f_scisle(x);liczba wyrazow szeregu;warunek stopu\n");
-    fprintf(*plik_wizualny, "|         x|                   f_szereg(x)|                   f_scisle(x)|liczba wyrazow szeregu|warunek stopu|\n");
+    fprintf(*csv_file, "x;f_series(x);exact_function(x);Ilość liczb w szeregu;Warunek zatrzymania\n");
+    fprintf(*visual_file, "|                  x|       f_series(x)| exact_function(x)|Ilość liczb w szeregu|Warunek zatrzymania|\n");
 }
 
-Parametry wczytaj_parametry()
+Parameters read_parameters()
 {
-    Parametry parametry;
-    int ret = -1;
+    Parameters parameters;
     do
     {
-        printf("Podaj:\nPoczątek przedziału\nKoniec przedziału\nKroki\nDokładność\nMaksymalna liczba iteracji\n");
-        ret = scanf("%Lf %Lf %Lf %lf %ld",
-                    &parametry.poczatek_przedzialu,
-                    &parametry.koniec_przedzialu,
-                    &parametry.kroki,
-                    &parametry.dokladnosc,
-                    &parametry.maksylana_liczba_iteracji);
-        if (ret != 5)
-            printf("Błędne dane\n");
-        else if (!sprawdz_parametry(&parametry))
-            ret = -1;
-        while (getchar() != '\n')
-            ;
-    } while (ret != 5);
-
-    return parametry;
+        printf("UWAGA: liczby mogą mieć maksymalnie 16 cyfr po przecinku, w przeciwnym wypadku pojawią się błędy\n");
+        parameters.interval_start = read_long_double("Podaj początek przedziału: ");
+        parameters.interval_end = read_long_double("Podaj koniec przedziału: ");
+        parameters.steps = read_long_double("Podaj kroki: ");
+        parameters.precision = read_double("Podaj dokładność: ");
+        parameters.max_iterations = read_long_double("Podaj maksymalną liczbę iteracji: ");
+    } while (!check_parameters_and_report_error(&parameters));
+    return parameters;
 }
 
-int sprawdz_parametry(Parametry *Parametry)
+long double read_long_double(char *message)
 {
-    if ((*Parametry).poczatek_przedzialu <= -1 || (*Parametry).poczatek_przedzialu >= 1)
+    long double number;
+    int ret;
+    do
+    {
+        printf("%s", message);
+        ret = scanf("%Lf", &number);
+        if (ret != 1)
+            printf("Wrong data\n");
+        while (getchar() != '\n')
+            ;
+    } while (ret != 1);
+    return number;
+}
+
+double read_double(char *message){
+    double number;
+    int ret;
+    do
+    {
+        printf("%s", message);
+        ret = scanf("%lf", &number);
+        if (ret != 1)
+            printf("Wrong data\n");
+        while (getchar() != '\n')
+            ;
+    } while (ret != 1);
+    return number;
+}
+
+int check_parameters_and_report_error(Parameters *Parameters)
+{
+    if ((*Parameters).interval_start <= -1 || (*Parameters).interval_start >= 1)
     {
         printf("Początek przedziału musi być w przedziale (-1, 1)\n");
         return 0;
     }
-    if ((*Parametry).koniec_przedzialu <= -1 || (*Parametry).koniec_przedzialu >= 1)
+    if ((*Parameters).interval_end <= -1 || (*Parameters).interval_end >= 1)
     {
         printf("Koniec przedziału musi być w przedziale (-1, 1)\n");
         return 0;
     }
-    if ((*Parametry).poczatek_przedzialu >= (*Parametry).koniec_przedzialu)
+    if ((*Parameters).interval_start >= (*Parameters).interval_end)
     {
         printf("Początek przedziału musi być mniejszy od końca przedziału\n");
         return 0;
     }
-    if ((*Parametry).kroki <= 0)
+    if ((*Parameters).steps <= 0)
     {
         printf("Kroki muszą być dodatnie\n");
         return 0;
     }
-    if ((*Parametry).dokladnosc <= 0)
+    if ((*Parameters).precision <= 0)
     {
         printf("Dokładność musi być dodatnia\n");
         return 0;
     }
-    if ((*Parametry).maksylana_liczba_iteracji <= 0)
+    if ((*Parameters).max_iterations <= 0)
     {
         printf("Maksymalna liczba iteracji musi być dodatnia\n");
         return 0;
@@ -122,100 +148,100 @@ int sprawdz_parametry(Parametry *Parametry)
     return 1;
 }
 
-long double func(long double x)
+long double function(long double x)
 {
-    return pow(1 - x, -1. / 3);
+    return pow((double)(1 - x), -1. / 3);
 }
 
-SzeregInfo szereg(long double x, double dokladnosc, long liczba_iteracji)
+SeriesInfo series(long double x, double precision, long number_of_iterations)
 {
-    long iteracja;
-    SzeregInfo szereg_info = utworz_szereg_info(x);
+    long iteration;
+    SeriesInfo series_info = initialize_series_info(x);
 
-    liczba_iteracji -= 2; // pierwsze 2 wyrazy są automatycznie sumowane
+    number_of_iterations -= 2; // pierwsze 2 wyrazy są automatycznie sumowane
 
-    for (iteracja = 1; iteracja <= liczba_iteracji; iteracja++)
+    for (iteration = 1; iteration <= number_of_iterations; iteration++)
     {
-        iteruj_szereg(&iteracja, &szereg_info);
-        if (czy_uzyskano_dokladnosc(&szereg_info, &dokladnosc))
+        iterate_series(&iteration, &series_info);
+        if (is_precision_achieved(&series_info, &precision))
             break;
     }
 
-    szereg_info.ostatnia_iteracja = iteracja + 2;
-    szereg_info.skonczono_iteracje = iteracja == liczba_iteracji;
+    series_info.last_iteration = iteration + 2;
+    series_info.iterations_finished = iteration == number_of_iterations;
 
-    return szereg_info;
+    return series_info;
 }
 
-SzeregInfo utworz_szereg_info(long double x)
+SeriesInfo initialize_series_info(long double x)
 {
-    SzeregInfo szereg_info;
-    szereg_info.x = x;
-    szereg_info.wyraz = ((double)1 / 3) * x;
-    szereg_info.suma = 1 + szereg_info.wyraz;
+    SeriesInfo series_info;
+    series_info.x = x;
+    series_info.term = ((double)1 / 3) * x;
+    series_info.sum = 1 + series_info.term;
 
-    szereg_info.ostatnia_iteracja = 0;
-    szereg_info.skonczono_iteracje = 0;
-    szereg_info.uzyskano_dokladnosc = 0;
-    return szereg_info;
+    series_info.last_iteration = 0;
+    series_info.iterations_finished = 0;
+    series_info.precision_achieved = 0;
+    return series_info;
 }
 
-void iteruj_szereg(long *iteracja, SzeregInfo *szereg_info)
+void iterate_series(long *iteration, SeriesInfo *series_info)
 {
-    unsigned long licznik, mianownik;
+    unsigned long numerator, denominator;
 
-    licznik = 1 + (*iteracja * 3);
-    mianownik = (*iteracja + 1) * 3;
+    numerator = 1 + (*iteration * 3);
+    denominator = (*iteration + 1) * 3;
 
-    (*szereg_info).wyraz *= ((long double)licznik / mianownik) * (*szereg_info).x;
-    (*szereg_info).suma += (*szereg_info).wyraz;
+    (*series_info).term *= ((long double)numerator / denominator) * (*series_info).x;
+    (*series_info).sum += (*series_info).term;
 }
 
-int czy_uzyskano_dokladnosc(SzeregInfo *szereg_info, double *dokladnosc)
+int is_precision_achieved(SeriesInfo *series_info, double *precision)
 {
-    if ((*szereg_info).wyraz < *dokladnosc)
-        (*szereg_info).uzyskano_dokladnosc = 1;
-    return (*szereg_info).uzyskano_dokladnosc;
+    if ((*series_info).term < *precision)
+        (*series_info).precision_achieved = 1;
+    return (*series_info).precision_achieved;
 }
 
-void zapisz_wyniki_i_wypisz(SzeregInfo *szereg_info, long double *y, FILE **plik_wizualny, FILE **plik_csv)
+void save_and_print_results(SeriesInfo *series_info, long double *y, FILE **visual_file, FILE **csv_file)
 {
-    char *warunek_stopu;
-    if ((*szereg_info).skonczono_iteracje && (*szereg_info).uzyskano_dokladnosc)
-        warunek_stopu = "oba";
-    else if ((*szereg_info).skonczono_iteracje)
-        warunek_stopu = "iteracje";
-    else if ((*szereg_info).uzyskano_dokladnosc)
-        warunek_stopu = "dokladnosc";
+    char *stop_condition;
+    if ((*series_info).iterations_finished && (*series_info).precision_achieved)
+        stop_condition = "oba";
+    else if ((*series_info).iterations_finished)
+        stop_condition = "iteracje";
+    else if ((*series_info).precision_achieved)
+        stop_condition = "precision";
     else
     {
-        prinf("Gdzieś wystąpił błąd, nie ustalono warunku stopu\n");
+        printf("Gdzieś wystąpił błąd, nie ustalono warunku stopu\n");
         exit(1);
     }
 
-    fprintf(*plik_wizualny, "|%10.5Lf|%30.25Lf|%30.25Lf|%22ld|%13s|\n",
-            (*szereg_info).x,
-            (*szereg_info).suma,
+    fprintf(*csv_file, "%+18.16Lf;%18.16Lf;%18.16Lf;%ld;%s\n",
+            (*series_info).x,
+            (*series_info).sum,
             *y,
-            (*szereg_info).ostatnia_iteracja,
-            warunek_stopu);
-    fprintf(*plik_csv, "%20.18Lf;%50.40Lf;%50.40Lf;%ld;%s\n",
-            (*szereg_info).x,
-            (*szereg_info).suma,
+            (*series_info).last_iteration,
+            stop_condition);
+    fprintf(*visual_file, "|%+18.16Lf|%18.16Lf|%18.16Lf|%21ld|%19s|\n",
+            (*series_info).x,
+            (*series_info).sum,
             *y,
-            (*szereg_info).ostatnia_iteracja,
-            warunek_stopu);
+            (*series_info).last_iteration,
+            stop_condition);
 
-    printf("x = %Lf\n", (*szereg_info).x);
-    printf("f_szereg(x) = %Lf\n", (*szereg_info).suma);
-    printf("f_scisle(x) = %Lf\n", *y);
-    printf("liczba wyrazow szeregu = %ld\n", (*szereg_info).ostatnia_iteracja);
-    printf("warunek stopu = %s\n", warunek_stopu);
+    printf("x = %Lf\n", (*series_info).x);
+    printf("suma szeregu = %Lf\n", (*series_info).sum);
+    printf("f(x) = %Lf\n", *y);
+    printf("liczba termow seriesu = %ld\n", (*series_info).last_iteration);
+    printf("warunek zatrzymania = %s\n", stop_condition);
     printf("\n\n\n");
 }
 
-void zamknij_pliki(FILE **plik_wizualny, FILE **plik_csv)
+void close_files(FILE **visual_file, FILE **csv_file)
 {
-    fclose(*plik_wizualny);
-    fclose(*plik_csv);
+    fclose(*visual_file);
+    fclose(*csv_file);
 }
