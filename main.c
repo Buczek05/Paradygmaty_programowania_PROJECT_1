@@ -6,7 +6,7 @@
 
 typedef struct
 {
-    long double interval_start, interval_end, steps;
+    long double interval_start, interval_end, n;
     double precision;
     long max_iterations;
 } Parameters;
@@ -36,10 +36,10 @@ int main()
     FILE *visual_file, *csv_file;
     open_check_files(&visual_file, &csv_file);
     Parameters parameters = read_parameters();
-    long double x, *start, *end, *steps;
+    long double x, *start, *end, steps;
     start = &parameters.interval_start;
     end = &parameters.interval_end;
-    steps = &parameters.steps;
+    steps = (end-start) / parameters.n;
     x = *start;
     while (x <= *end + 1e-15)
     {
@@ -48,7 +48,7 @@ int main()
                                         parameters.max_iterations);
         long double y = function(x);
         save_and_print_results(&series_info, &y, &visual_file, &csv_file);
-        x += *steps;
+        x += steps;
     }
     close_files(&visual_file, &csv_file);
     return 0;
@@ -75,7 +75,7 @@ Parameters read_parameters()
         printf("UWAGA: liczby mogą mieć maksymalnie 16 cyfr po przecinku, w przeciwnym wypadku pojawią się błędy\n");
         parameters.interval_start = read_long_double("Podaj początek przedziału: ");
         parameters.interval_end = read_long_double("Podaj koniec przedziału: ");
-        parameters.steps = read_long_double("Podaj kroki: ");
+        parameters.n = read_long_double("Podaj liczbę podziału: ");
         parameters.precision = read_double("Podaj dokładność: ");
         parameters.max_iterations = read_long_double("Podaj maksymalną liczbę iteracji: ");
     } while (!check_parameters_and_report_error(&parameters));
@@ -130,7 +130,7 @@ int check_parameters_and_report_error(Parameters *Parameters)
         printf("Początek przedziału musi być mniejszy od końca przedziału\n");
         return 0;
     }
-    if ((*Parameters).steps <= 0)
+    if ((*Parameters).n <= 0)
     {
         printf("Kroki muszą być dodatnie\n");
         return 0;
@@ -151,6 +151,7 @@ int check_parameters_and_report_error(Parameters *Parameters)
 long double function(long double x)
 {
     return pow((double)(1 - x), -1. / 3);
+
 }
 
 SeriesInfo series(long double x, double precision, long number_of_iterations)
@@ -199,7 +200,7 @@ void iterate_series(long *iteration, SeriesInfo *series_info)
 
 int is_precision_achieved(SeriesInfo *series_info, double *precision)
 {
-    if ((*series_info).term < *precision)
+    if (fabs((*series_info).term) < *precision)
         (*series_info).precision_achieved = 1;
     return (*series_info).precision_achieved;
 }
