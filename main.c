@@ -140,9 +140,9 @@ int check_parameters_and_report_error(Parameters *Parameters)
         printf("Dokładność musi być dodatnia\n");
         return 0;
     }
-    if ((*Parameters).max_iterations <= 0)
+    if ((*Parameters).max_iterations <= 1)
     {
-        printf("Maksymalna liczba iteracji musi być dodatnia\n");
+        printf("Maksymalna liczba iteracji musi być większa od 1\n");
         return 0;
     }
     return 1;
@@ -167,7 +167,7 @@ SeriesInfo series(long double x, double precision, long number_of_iterations)
         if (is_precision_achieved(&series_info, &precision))
             break;
     }
-
+    iteration--;
     series_info.last_iteration = iteration + 2;
     series_info.iterations_finished = iteration == number_of_iterations;
 
